@@ -71,8 +71,8 @@ b1    = 1/(Bat_Q*V_bat);      %Watt*h   [REMOVED 3600*]
 b2    = -1/(Bat_Q*V_bat);
 
 A  = [1 0.0278*Ts; 0 0]; % 0.0278 = 100/3600
-B  = [0;b1]
-Bd = [0;b2]
+B  = [0;b1];
+Bd = [0;b2];
 
 X      = zeros(2,length(0:Ts:simTime));
 X(:,1) = [50 ,0];
