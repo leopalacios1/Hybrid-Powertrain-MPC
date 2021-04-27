@@ -1,62 +1,53 @@
-% Initialize 
+%---------------------------------------------------------------------------%
+%                                   SETUP                                   |
+%---------------------------------------------------------------------------%
+% Initialize; Clear screen, delete workspace and close figures. 
 close all; clc; clear;
-% Current Folder and Set new User Path;
-fileName    = 'CRA1_Carrizosa-Palacios.m'; 
-filePath    = matlab.desktop.editor.getActiveFilename
-proyectPath = filePath(1:length(filePath)-length(char(fileName)))
-userpath(proyectPath);
 
-% SYSTEM MODEL - SYMBOLIC ______________________________________________________________________________
+% Current Folder and Set new User Path;
+filePath    = matlab.desktop.editor.getActiveFilename;
+fileName    = filePath(find(filePath=='/',1,'last')+1:end);
+proyectPath = filePath(1:length(filePath)-length(char(fileName))); 
+userpath(proyectPath);
+cd(proyectPath)
+
 
 % MPC Parameters _______________________________________________________________________________________
 
 % SYSTEM PARAMETERS ____________________________________________________________________________________
 
-% REALIZATION OF SYSTEM AND EQUILIBRIUM POINTS _________________________________________________________
-%%
-% LOAD DISTURBANCE (PLAY LIKE GOD)
 clc;
-
+% NOTE: Input power in 
 ts   = 1;               % Sampling time (s)
 Q    = 2.2;             % Battery rated capacity (Ah)
 Vbat = 43.075;          % Battery Voltage, assumed constant (V)
-b    = 1/(3600*Q*Vbat)  % Constant
+b    = 1/(3600*Q*Vbat); % Constant
 
+% MODEL 1 : Continous -> Discrete
 A = [1 100; 0 0];
 B = [0;b];
 C = eye(2);
 D = 0;
 
-SYS_CoM_ct = ss(A,B,C,D)
+SYS_CoM_dt = ss(A,B,C,D)
 % Discretize model
-SYS_CoM_dt = c2d(SYS_CoM_ct,ts,'tustin')                 % LATER PASSED TO MPC 
-
-  
+%SYS_CoM_dt = c2d(SYS_CoM_ct,ts,'tustin')                 % LATER PASSED TO MPC 
 %%
 % SYSTEM CONSTRAINTS ___________________________________________________________________________________
 
-nStates = size(A_lin,1);
-nInputs = size(B_lin,2);
-
-% State Constraints - CHANGE AS NEEEDED
-stateMax_global = 15; % Cm     
-stateMin_global = 0;  % Cm 
-
+nStates = size(A,1)
+nInputs = size(B,2)
 % 
-StateConstMax_global = repmat(stateMax_global,nStates,1); % LATER PASSED TO MPC 
-StateConstMin_global = repmat(stateMin_global,nStates,1); % LATER PASSED TO MPC 
+StateConstMax_global = [80; inf]; % LATER PASSED TO MPC 
+StateConstMin_global = [20; -inf]; % LATER PASSED TO MPC 
+%
+InputConstMax_global = [5];  % LATER PASSED TO MPC    % maxGlobal is 5 amps -> change to corresponding power
+InputConstMin_global = [0]; % LATER PASSED TO MPC 
 
-% Input Constraints - CHANGE AS NEEEDED
-inputMax_global = 10; % Volts
-inputMin_global = 0;  % Volts
+%% CONTROLLER SETTING __________________________________________________________________________________
 
-InputConstMax_global = repmat(inputMax_global,nInputs,1); % LATER PASSED TO MPC 
-InputConstMin_global = repmat(inputMin_global,nInputs,1); % LATER PASSED TO MPC 
-
-% CONTROLLER SETTING __________________________________________________________________________________
-
-statePenalty = [1 40];                                       % LATER PASSED TO MPC                 
-inputPenalty = [1 100];                                      % LATER PASSED TO MPC             
+statePenalty = [1 1];                                       % LATER PASSED TO MPC                 
+inputPenalty = [1 1];                                      % LATER PASSED TO MPC             
 CurrentState = zeros(nStates,1);                             % LATER PASSED TO MPC  (THIS WILL BE INSIDE SIMULATION LOOP)           
 Hp = 25  ;  % prediction horizon
 
@@ -68,10 +59,10 @@ h2_ref_value = [h2_0+3, 1];
 h2_ref_time  = [0 ,220];
 
 
-% SIMULATION   _________________________________________________________________________________________
+%% SIMULATION   _________________________________________________________________________________________
 
-ts = ts;       % sampling time - ASSIGN BEFORE MODEL LINEARIZATION (line 67)
-timeSpan = 400; % simulation runtime
+ts = 0.1;        
+timeSpan = 40; % simulation runtime
 nSteps   = round(timeSpan/ts);
 
 % Nonlinear model response (recall input is relative to equilibrium)
@@ -82,36 +73,20 @@ statesHist_l = zeros(nStates,1);      % each colum represents state at time step
 
 % Controller signal and computational time history
 controlHist  = [0;0];             % each colum represents input at time step
-CalcTime = [0];
-
-% LOGIC FOR CHANGING REFERENCES ___________________
-REF1 = zeros(1,timeSpan+1);
-REF2 = zeros(1,timeSpan+1);
-for i = 1:nSteps
-    h1_ref = 0;
-    h2_ref = 0;
-    for j = 1:length(h1_ref_time)
-        if h1_ref_time(j) <= i*ts
-            h1_ref = h1_ref + h1_ref_value(j);
-        end
-    end
-    for j = 1:length(h2_ref_time)
-        if h2_ref_time(j) <= i*ts
-            h2_ref = h2_ref + h2_ref_value(j);
-        end
-    end
-    REF1(i) = h1_ref;
-    REF2(i) = h2_ref; 
-end
+CalcTime     = [0];
 
 % Start simulation
 startSim = tic;
 % Define variables that avoid issues when commenting out controller for step response
 diagnostics = 0;
 calcTime = [];
+% TESTING: Sim required parameters
+Q    = 2.2;    %Ah
+Vbat = 43.075; %V
+b    = 1/(3600*Q*Vbat);
+
 for i = 1:nSteps
     
-    Reference = [REF1(i);REF2(i)];
     % Get Measured State (State of nonlinear plant)____
     CurrentState = statesHist_nl(:,i);
     
@@ -130,13 +105,15 @@ for i = 1:nSteps
     end  
     
     % Simulate NonLinear Plant ________________________
-    Sim = sim('nonlinearSim');
+    Sim  = sim('SA_50');
     % Get simulation states
-    h1_h2_nonlinear = Sim.h1_h2_nonlinear';
-    h3_h4_nonlinear = Sim.h3_h4_nonlinear';
+    SOC  = Sim.SOC';
+    iBAT = Sim.h3_h4_nonlinear';
     % Get final States
-    h1_h2_nonlinear = h1_h2_nonlinear(:,end);
-    h3_h4_nonlinear = h3_h4_nonlinear(:,end);
+    SOC_f  = SOC(:,end);
+    iBAT_f = iBAR(:,end);
+    
+    % Calculate State: C-rate
     
     % Simulate Linear Model __________________________ 
     X_l = A*(CurrentState)+B*(U);
