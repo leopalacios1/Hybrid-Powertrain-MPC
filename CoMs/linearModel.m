@@ -26,6 +26,6 @@ InputsMin = uMin;
 SlewRate  = 0.1*Iend*Vend*Ts;
 
 % Normalization of states and inpute for controller
-normalX = [50; 1];
-normU   = 50;
+normalX = [30; 1];
+normU   = 20;
 

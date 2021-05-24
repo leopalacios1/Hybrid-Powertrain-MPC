@@ -35,7 +35,7 @@ cd(proyectPath);
 
 % Define global varibale to be used by files throughout the project.
 global Ts SoC_Max SoC_Min C_rate_Max C_rate_Min uMax uMin;
-global Hp Q R;
+global Hp Q R slewRate Ref lastPfc warmStart;
 
 
 % Import Casadi and Yalmip
@@ -55,7 +55,10 @@ import casadi.*
 powerProfile = 4; 
 
 % BATTERY INITIAL CONDITIONS
-SoC_init   = 50    ;   % Initial state of charge.        [%]
+SoC_init     = 23  ;   % Initial state of charge.        [%]
+
+% FUEL CELL INITIAL CONDITIONS
+initialPower = 0   ;   %                                 [W]          
 
 % ------------------------ Simulation Oriented Model -----------------------%
 % The SoM_name file is assumed to be a simulink file (.slx) containing the model.
@@ -83,25 +86,22 @@ socRef     = 50;        % State of charge reference             [%]
 crateRef   = 0;         % C-rate reference                      [h^-1]
 
 % Constraint on input and states;
-SoC_Max    = 80;        % Maximum State of Charge               [%]
-SoC_Min    = 20;        % Minimum State of Charge               [%]
-C_rate_Max = inf;       % Maximim C-rate                        [h^-1]
-C_rate_Min = -inf;      % Minumum C-rate                        [h^-1]
+SoC_Max    = 80   ;     % Maximum State of Charge               [%]
+SoC_Min    = 20   ;     % Minimum State of Charge               [%]
+C_rate_Max = inf  ;     % Maximim C-rate                        [h^-1]
+C_rate_Min = -inf ;     % Minumum C-rate                        [h^-1]
+slewRate   = 6    ;     % Fuel Cell Power Slew Rate             [W]
 
-% Linear Controller Constraints
+% Controller Constraints
 uMax       = 60;        % Maximum allowed FC power              [W]
-uMin       = 20;        % Minimum allowed FC power              [W]
-
-% Nonlinear Controller Constraints
-uMax_nl    =  000 ;     % Maximum allowed FC current            [A]
-uMin_nl    =  000 ;     % Minumum allowed FC current            [A]
+uMin       = 20;         % Minimum allowed FC power              [W]
 
 % Sampling time and Prediction Horizon Definition
 TsVec      = [1]  ;     % Controller Sampling Times             [s]
 HpVec      = [40] ;     % Prediction Horizon Sampling Times     [#]
 
 % -------------------------- Simulation Parameters -------------------------%
-simTime    = 2000 ;
+simTime    = 20 ;
 
 
 %---------------------------------------------------------------------------%
@@ -115,8 +115,11 @@ eval(SoM_param)
 if modelSelection == 1
     modelFile  = 'linearModel';
     configFile = 'linearMPCconfig';
+    simFile    = [SoM_name, '_LINEAR'];
 elseif modelSelection == 2
-    modelFile  = 'nonLinearModel',
+    modelFile  = 'nonLinearModel';
+    configFile = 'nonLinearMPCconfig';
+    simFile    = [SoM_name, '_NONLINEAR'];
 end
 
 % Figure index
@@ -132,26 +135,32 @@ cd(folderName);
 
 for Ts = TsVec
     for Hp = HpVec  %[20,30]
-      for q_soc = 20  %[80,500]
-          for q_crate = 600  %[1,80,500]
-              for r = 50    %[80,500]
-                    
-                    % MPC's Weights
-                    Q=diag([q_soc q_crate]);   
-                    R=diag([r]); 
+      for q_soc = 200  %[80,500]
+          for q_crate = 500  %[1,80,500]
+              for r = 10    %[80,500]
                   
                     % Define optimizer controller for Yalmip
                     if modelSelection == 1
+                       % MPC's Weights
+                       Q=diag([q_soc q_crate]);   
+                       R=diag([r]); 
                        eval(modelFile)
                        eval(configFile)
+                    elseif modelSelection == 2
+                       % MPC's Weights
+                       Q   = diag([q_soc q_crate 0]);   
+                       R   = diag([r]); 
+                       Ref = [socRef;crateRef;0];
+                       warmStart = repmat(0,Hp,1);
                     end
                     
                     % Filename for results output.
                     fileName   = ['HP',num2str(Hp),'_Qa',num2str(q_soc),'_Qb',num2str(q_crate),'_R',num2str(r)];
                     
                     % Simulate system:
+                    lastPfc = initialPower;
                     t_init  = now;
-                    SimResults  =  sim(SoM_name);
+                    SimResults  =  sim(simFile);
                     f_final = now;
                     simCompTime = (f_final - t_init) * 3600 *24;
                     

@@ -1,3 +1,5 @@
+global capacity
+
 % BATTERY
 bat_nom_V  = 40    ;   % Nominal voltage.                [V]
 capacity   = 2.2   ;   % Rated capacity.                 [Ah]
