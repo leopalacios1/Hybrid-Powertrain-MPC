@@ -141,5 +141,19 @@ subplot(2,1,2); hold on;
 stem(i,P); 
 legend
 
+%%
+
+E_0 = 46.5595;
+K   = 0.0027639;
+A   = 43.2154;
+B   = 0.108087;
+Q   = 2.2;
+I   = I_bat_hist.Data;
+it  = cumsum(I).*1/Q;
+V   = E_0 - K.*Q./(Q-it).*it+A.*exp(-B.*it);
+
+plot(V_bat_hist,'k','LineWidth',1.8);
+
+
 
 

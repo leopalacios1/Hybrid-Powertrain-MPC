@@ -1,4 +1,4 @@
-global A B C D Bd SlewRate StatesMin StatesMax normalX normU
+global A B C D Bd SlewRate StatesMin StatesMax normalX normU uMax uMin InputsMax InputsMin Ref
 
 %Parameter b
 b1 = 1/(capacity*bat_nom_V);   
@@ -11,9 +11,16 @@ Bd = [0;b2];
 C  = eye(2);
 D  = 0;
 
+% References
+Ref = [socRef;crateRef];
+
 % Constraints defined in main
 StatesMin = [SoC_Min; C_rate_Min];   
 StatesMax = [SoC_Max; C_rate_Max];
+
+% Constraints on control signal
+InputsMax = uMax;
+InputsMin = uMin;
 
 % Model input slew rate
 SlewRate  = 0.1*Iend*Vend*Ts;
@@ -21,5 +28,4 @@ SlewRate  = 0.1*Iend*Vend*Ts;
 % Normalization of states and inpute for controller
 normalX = [50; 1];
 normU   = 50;
-
 
