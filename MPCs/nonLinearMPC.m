@@ -3,8 +3,7 @@
         global Ts SoC_Max SoC_Min C_rate_Max C_rate_Min uMax uMin StatesMin StatesMax  InputsMin InputsMax Hp Q R;
         
 if time > 0.000000001  
-        %Clear YALMIP variables                            
-        yalmip('clear')
+     
         %Current State
         States = [SoC,C_rate,lastPfc,0];
         %Hp = 50;
